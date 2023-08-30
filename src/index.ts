@@ -1,6 +1,7 @@
 import RingCentral from '@rc-ex/core';
 import { v4 as uuid } from 'uuid';
 import WebSocket from 'ws';
+import { PeerConnection, DescriptionType } from 'node-datachannel';
 
 import { SipMessage } from './sip-message';
 import { branch, generateResponse } from './utils';
@@ -29,9 +30,10 @@ const main = async () => {
       sipInfo: [{ transport: 'WSS' }],
     });
   const sipInfo = sipProvision.sipInfo![0];
+  console.log(JSON.stringify(sipInfo, null, 2));
   await rc.revoke();
 
-  const onMessage = (message: string) => {
+  const onMessage = async (message: string) => {
     const sipMessage = SipMessage.fromString(message);
     if (sipMessage.subject === 'SIP/2.0 401 Unauthorized') {
       const wwwAuth = (sipMessage.headers['Www-Authenticate'] || sipMessage.headers['WWW-Authenticate']) as string;
@@ -60,6 +62,14 @@ const main = async () => {
         });
         send(registerMessage);
       }
+    } else if (sipMessage.subject.startsWith('INVITE sip:')) {
+      const sdp = sipMessage.body;
+      const peer = new PeerConnection('callee', {
+        iceServers: sipInfo.stunServers!.map((s) => `stun:${s}`),
+      });
+      await peer.setRemoteDescription(sdp, DescriptionType.Offer);
+
+      // todo: answer the call
     }
   };
 
