@@ -20,8 +20,13 @@ export class SipMessage {
   }
 
   public toString(): string {
-    return `${this.subject}\r\n${Object.entries(this.headers)
-      .map((entries) => entries.join(': '))
-      .join('\r\n')}\r\nContent-Length: ${this.body.length}\r\n\r\n${this.body}`.trim();
+    const list: string[] = [];
+    list.push(this.subject);
+    for (const item of Object.entries(this.headers)) {
+      list.push(`${item[0]}: ${item[1]}`);
+    }
+    list.push('');
+    list.push(this.body);
+    return list.join('\r\n');
   }
 }
