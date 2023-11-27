@@ -25,6 +25,11 @@ export class SipMessage {
     for (const item of Object.entries(this.headers)) {
       list.push(`${item[0]}: ${item[1]}`);
     }
+    if (this.body && this.body.length > 0) {
+      list.push(`Content-Length: ${this.body.length}`);
+    } else {
+      list.push('Content-Length: 0');
+    }
     list.push('');
     list.push(this.body);
     return list.join('\r\n');
