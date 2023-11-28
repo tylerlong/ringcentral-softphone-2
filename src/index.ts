@@ -1,13 +1,14 @@
 import RingCentral from '@rc-ex/core';
 import { v4 as uuid } from 'uuid';
 import WebSocket from 'ws';
-import { PeerConnection, DescriptionType } from 'node-datachannel';
+import { PeerConnection, Audio, RtcpReceivingSession } from 'node-datachannel';
 
 import { SipMessage } from './sip-message';
 import { branch, generateResponse } from './utils';
 
 const callerId = uuid();
 const fromTag = uuid();
+const toTag = uuid();
 const fakeDomain = uuid() + '.invalid';
 const fakeEmail = uuid() + '@' + fakeDomain;
 let cseq = Math.floor(Math.random() * 10000);
@@ -67,9 +68,46 @@ const main = async () => {
       const peer = new PeerConnection('callee', {
         iceServers: sipInfo.stunServers!.map((s) => `stun:${s}`),
       });
-      await peer.setRemoteDescription(sdp, DescriptionType.Offer);
+      await peer.setRemoteDescription(sdp, 'offer' as any);
 
-      // todo: answer the call
+      const audio = new Audio('audio', 'RecvOnly' as any);
+      audio.addOpusCodec(111);
+      audio.setBitrate(48000);
+      const track = peer.addTrack(audio);
+      const session = new RtcpReceivingSession();
+      track.setMediaHandler(session);
+      track.onMessage(() => {
+        console.log('Receiving audio...');
+      });
+
+      const audio2 = new Audio('audio', 'SendOnly' as any);
+      audio2.addOpusCodec(111);
+      audio2.setBitrate(48000);
+      peer.addTrack(audio2);
+
+      peer.setLocalDescription();
+
+      peer.onGatheringStateChange((state) => {
+        console.log('Gathering state changed to ' + state);
+        if (state === 'complete') {
+          const desc = peer.localDescription()!;
+          const responseMessage = new SipMessage(
+            'SIP/2.0 200 OK',
+            {
+              Via: sipMessage.headers.Via,
+              From: sipMessage.headers.From,
+              'Call-Id': sipMessage.headers['Call-Id'],
+              CSeq: sipMessage.headers.CSeq,
+              'Content-Type': 'application/sdp',
+              Contact: `<sip:${fakeEmail};transport=ws>`,
+              Supported: 'outbound',
+              To: `${sipMessage.headers.To};tag=${toTag}`,
+            },
+            desc.sdp,
+          );
+          send(responseMessage);
+        }
+      });
     }
   };
 
